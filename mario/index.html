@@ -1,0 +1,73 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>超级玛丽 · 1-1</title>
+<style>*{box-sizing:border-box}body{background:#111524;color:#fff3ce;font:16px monospace;margin:0;min-height:100vh;display:grid;place-items:center}main{width:min(96vw,920px)}header,footer,nav{display:flex;align-items:center;justify-content:space-between;gap:10px}header small{color:#ffbb55;letter-spacing:2px}h1{font-size:24px}canvas{background:#628aff;width:100%;image-rendering:pixelated;display:block;border:4px solid #303952}footer{flex-wrap:wrap}button{background:#27324b;color:white;border:1px solid #54647d;padding:10px;cursor:pointer;touch-action:none}nav{justify-content:flex-start;user-select:none}p{color:#c9d1de;font-size:14px}</style>
+<main><header><h1>超级玛丽</h1><small>WORLD 1–1</small></header><canvas width="384" height="224" aria-label="超级玛丽第一关"></canvas><footer><p>← → 移动　Z / 空格 跳跃　X 加速　Enter 开始 / 暂停</p><button id="reset">重新开始</button></footer><nav><button data-key="ArrowLeft">◀</button><button data-key="ArrowRight">▶</button><button data-key="KeyX">加速</button><button data-key="KeyZ">跳跃</button></nav></main><script>
+const canvas=document.querySelector('canvas'), c=canvas.getContext('2d'),keys=new Set();
+const gaps=[[69,70],[86,88],[153,154]], flag=198*16;
+let tiles,actors,p,mode,camera,score,coins,timer,spawned,frame,invincible,grounded;
+function ground(i){return !gaps.some(([a,b])=>i>=a&&i<=b)}
+function tile(i,j,type){tiles.set(i+','+j,{x:i*16,y:j*16,w:16,h:16,type})}
+function start(){
+ tiles=new Map();actors=[];spawned=new Set();p={x:40,y:176,w:12,h:16,vx:0,vy:0};camera=score=coins=frame=invincible=0;grounded=false;timer=400;mode='ready';
+ for(let i=0;i<215;i++)if(ground(i))tile(i,12,'ground');
+ for(const [i,j,s] of [[16,8,'?'],[20,8,'bM b?b'.replaceAll(' ','')],[22,4,'?'],[77,8,'bMb'],[80,4,'bbbbbbbb'],[91,4,'bbb?'],[94,8,'b'],[100,8,'bb'],[106,8,'?'],[109,8,'?'],[109,4,'M'],[112,8,'?'],[118,8,'b'],[121,4,'bbb'],[128,4,'b??b'],[129,8,'bb'],[168,8,'bb?b']])Array.from(s,(v,k)=>tile(i+k,j,v));
+ for(const [i,h] of [[28,2],[38,3],[46,4],[57,4],[163,2],[179,2]])for(let y=0;y<h;y++)for(let k=0;k<2;k++)tile(i+k,12-h+y,'pipe'+k+(y===0?'top':''));
+ for(const [i,hs] of [[134,[1,2,3,4]],[140,[4,3,2,1]],[148,[1,2,3,4,4]],[155,[4,3,2,1]],[181,[1,2,3,4,5,6,7,8,8]]])hs.forEach((h,k)=>{for(let j=0;j<h;j++)tile(i+k,11-j,'step')});
+}
+function overlaps(a,b){return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y}
+function move(a,axis,d){
+ a[axis]+=d;
+ for(let i=Math.floor(a.x/16);i<=Math.floor((a.x+a.w)/16);i++)for(let j=Math.floor(a.y/16);j<=Math.floor((a.y+a.h)/16);j++){
+ const t=tiles.get(i+','+j);if(!t||!overlaps(a,t))continue;
+ a[axis]=d>0?t[axis]-a[axis==='x'?'w':'h']:t[axis]+16;
+ if(axis==='y'&&d<0&&a===p){
+ if(t.type==='M'||t.type==='?'){if(t.type==='M')actors.push({x:t.x,y:t.y-16,w:14,h:16,vx:.65,vy:0,type:'mush'});else{coins++;score+=200}t.type='used'}
+ else if(t.type==='b'&&p.h>16)tiles.delete(i+','+j);
+ }return true;
+ }return false;
+}
+function jump(){if(mode==='ready')mode='play';if(mode==='play'&&grounded){p.vy=-5.15;grounded=false}}
+function press(k){if(keys.has(k))return;keys.add(k);if(k==='Enter'){if(mode==='dead'||mode==='win')start();mode=mode==='play'?'pause':'play'}if(k==='Space'||k==='KeyZ')jump()}
+onkeydown=e=>{if(['Space','ArrowLeft','ArrowRight','Enter','KeyZ','KeyX'].includes(e.code)){e.preventDefault();press(e.code)}};
+onkeyup=e=>keys.delete(e.code);onblur=()=>{keys.clear();if(mode==='play')mode='pause'};
+document.querySelectorAll('[data-key]').forEach(b=>{b.onpointerdown=e=>{b.setPointerCapture(e.pointerId);press(b.dataset.key)};b.onlostpointercapture=()=>keys.delete(b.dataset.key)});
+canvas.onclick=()=>{if(mode!=='play'){if(mode==='dead'||mode==='win')start();mode='play'}};reset.onclick=start;
+function tick(){
+ if(mode!=='play')return;frame++;timer-=1/30;if(timer<=0){mode='dead';return}invincible=Math.max(0,invincible-1);
+ let dir=Number(keys.has('ArrowRight'))-Number(keys.has('ArrowLeft')),limit=keys.has('KeyX')?2.8:1.65;
+ p.vx=dir?Math.max(-limit,Math.min(limit,p.vx+dir*.13)):p.vx*.78;
+ if(move(p,'x',p.vx))p.vx=0;p.x=Math.max(camera,p.x);
+ p.vy=Math.min(5,p.vy+((keys.has('Space')||keys.has('KeyZ'))&&p.vy<0?.16:.33));
+ let feet=p.y+p.h;grounded=false;if(move(p,'y',p.vy)){grounded=p.vy>0;p.vy=0}
+ camera=Math.max(camera,Math.min(215*16-384,p.x-145));
+ for(let i of [22,40,51,53,80,82,97,99,114,116,124,126,174,176])if(i*16<camera+390&&!spawned.has(i)){spawned.add(i);actors.push({x:i*16,y:i===22?176:0,w:14,h:14,vx:-.55,vy:0,type:'enemy'})}
+ for(let a of actors){if(move(a,'x',a.vx))a.vx*=-1;a.vy=Math.min(5,a.vy+.26);if(move(a,'y',a.vy))a.vy=0;
+ if(overlaps(a,p)){if(a.type==='mush'){p.y-=26-p.h;p.h=26;a.gone=true;score+=1000}
+ else if(feet<=a.y+4&&p.vy>=0){a.gone=true;p.vy=-3.4;score+=100}
+ else if(!invincible){if(p.h>16){p.y+=10;p.h=16;invincible=100}else mode='dead'}}}
+ actors=actors.filter(a=>!a.gone&&a.y<240&&a.x>camera-32);
+ if(p.y>224)mode='dead';if(p.x+p.w>=flag)mode='win';
+}
+const colors={r:'#c93014',s:'#ffb466',d:'#743d13',k:'#211a17',w:'#fff4cb',o:'#df812d'};
+function rect(x,y,w,h,color){c.fillStyle=color;c.fillRect(Math.floor(x),Math.floor(y),w,h)}
+function sprite(x,y,rows,scale=1){rows.forEach((row,j)=>[...row].forEach((v,i)=>{if(colors[v])rect(x+i,y+j*scale,1,scale,colors[v])}))}
+const hero=['   rrrrr','  rrrrrrrrr','  dddssks',' dsds sskss',' dsdsssssss',' ddssssddd','   ssssss','  rrddrr',' rrrddrrr',' srdwwdrs',' ssddddss','  dddddd','  dddddd','  dd  dd',' ddd  ddd','dddd  dddd'];
+const enemy=['     dddd','    dddddd','   dddddddd','  dddddddddd','  dkkddkkddd',' ddwwkkwwdddd','dddkwddwkddddd','dddddddddddddd','  ssssssssss','   ssssssss',' kkkssssskkk','kkkk    kkkk'];
+function drawTile(t){let{x,y,type}=t;
+ if(type.startsWith('pipe')){rect(x,y,16,16,'#145714');rect(x+1,y,14,16,'#49ab10');rect(x+3,y,3,16,'#a1ef30');if(type.endsWith('top'))rect(x,y,16,2,'#244b16');return}
+ let block=type==='?'||type==='M';rect(x,y,16,16,'#49240e');rect(x+1,y,14,14,block?'#ffad29':type==='used'?'#ab632c':'#cd662d');
+ if(block){c.fillStyle='#843612';c.font='bold 14px monospace';c.fillText('?',x+4,y+13)}
+ else if(type==='ground'||type==='b'){rect(x,y+7,16,1,'#5e301f');rect(x+8,y,1,7,'#62331d');rect(x+3,y+8,1,7,'#62331d');rect(x+1,y,14,1,'#ffd19a')}
+ else if(type==='step'){rect(x+1,y,14,2,'#ffbf80');rect(x+1,y,2,14,'#ffbf80')}}
+function draw(){
+ rect(0,0,384,224,'#638afa');c.save();c.translate(-Math.floor(camera),0);
+ for(let n=0;n<14;n++){let x=n*280+26;rect(x,37,44,8,'#fff8df');rect(x+10,30,22,9,'#fff8df');for(let j=0;j<24;j++)rect(x-18+j,191-j,64-2*j,1,'#54b237')}
+ for(let i=Math.floor(camera/16);i<=Math.ceil((camera+384)/16);i++){for(let j=0;j<=12;j++){let t=tiles.get(i+','+j);if(t)drawTile(t)}if(ground(i))drawTile({x:i*16,y:208,type:'ground'})}
+ rect(flag,39,2,153,'#daf2a7');for(let j=0;j<14;j++)rect(flag-14+j,42+j,14-j,1,'#329834');
+ rect(flag+65,144,52,48,'#a84c27');for(let j=0;j<3;j++)for(let k=0;k<3;k++)drawTile({x:flag+65+k*16,y:144+j*16,type:'b'});rect(flag+82,171,15,21,'#322011');
+ for(const a of actors){if(a.type==='enemy')sprite(a.x,a.y+2,enemy);else{rect(a.x+4,a.y+8,7,8,'#ffe3ab');rect(a.x,a.y+4,14,6,'#cf3822');rect(a.x+3,a.y+1,8,5,'#f96c37');rect(a.x+4,a.y+3,3,3,'#fff3c8')}}
+ if(!invincible||frame%8<4)sprite(p.x,p.y,hero,p.h/16);
+ c.restore();c.font='bold 9px monospace';c.fillStyle='white';c.fillText('MARIO '+String(score).padStart(6,'0'),9,15);c.fillText('COIN '+coins,119,15);c.fillText('WORLD 1-1',209,15);c.fillText('TIME '+Math.max(0,Math.ceil(timer)),321,15);
+ if(mode!=='play'){rect(71,65,242,70,'#212435');c.textAlign='center';c.fillStyle='#ffd077';c.font='bold 18px monospace';c.fillText(({ready:'SUPER MARIO BROS.',pause:'PAUSED',dead:'GAME OVER',win:'COURSE CLEAR!'})[mode],192,95);c.fillStyle='white';c.font='10px sans-serif';c.fillText('按 Enter 或点击画面'+(mode==='dead'||mode==='win'?'重新挑战':'开始游戏'),192,118);c.textAlign='left'}
+}
+start();let last=0,carry=0;function loop(now){carry+=Math.min(now-last,80);last=now;while(carry>=1000/60){tick();carry-=1000/60}draw();requestAnimationFrame(loop)}requestAnimationFrame(loop);
+</script></html>
